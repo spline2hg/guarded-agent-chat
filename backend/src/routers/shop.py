@@ -29,6 +29,7 @@ class ProductOut(BaseModel):
 
 
 class OrderRequest(BaseModel):
+    user_id: str
     product_id: int
     quantity: int = Field(default=1, ge=1, le=99)
 
@@ -122,6 +123,27 @@ def replace_cart(req: CartSyncRequest, db=Depends(get_db)) -> list[CartLineOut]:
     return [CartLineOut(product_id=r.product_id, quantity=r.quantity) for r in rows]
 
 
+@router.get("/orders", response_model=list[OrderOut])
+def list_orders(user_id: str, db=Depends(get_db)) -> list[OrderOut]:
+    """One user's orders, newest first (order-history panel in the UI)."""
+    rows = db.scalars(
+        select(Order).where(Order.user_id == user_id).order_by(Order.id.desc())
+    ).all()
+    out: list[OrderOut] = []
+    for o in rows:
+        product = db.get(Product, o.product_id)
+        out.append(
+            OrderOut(
+                order_id=o.id,
+                product_id=o.product_id,
+                product_name=product.name if product else f"product #{o.product_id}",
+                quantity=o.quantity,
+                status=o.status,
+            )
+        )
+    return out
+
+
 @router.post("/orders", response_model=OrderOut)
 def create_order(req: OrderRequest, db=Depends(get_db)) -> OrderOut:
     product = db.get(Product, req.product_id)
@@ -134,7 +156,12 @@ def create_order(req: OrderRequest, db=Depends(get_db)) -> OrderOut:
         )
 
     product.stock -= req.quantity
-    order = Order(product_id=product.id, status="pending", quantity=req.quantity)
+    order = Order(
+        user_id=req.user_id,
+        product_id=product.id,
+        status="pending",
+        quantity=req.quantity,
+    )
     db.add(order)
     db.commit()
 

@@ -48,11 +48,20 @@ export async function fetchProducts(): Promise<Product[]> {
 }
 
 /** Guest checkout for one cart line; decrements stock server-side. */
-export async function createOrder(productId: number, quantity: number): Promise<OrderResult> {
+export async function createOrder(
+    userId: string,
+    productId: number,
+    quantity: number
+): Promise<OrderResult> {
     return apiRequest<OrderResult>('/api/orders', {
         method: 'POST',
-        body: JSON.stringify({ product_id: productId, quantity }),
+        body: JSON.stringify({ user_id: userId, product_id: productId, quantity }),
     })
+}
+
+/** The user's order history (newest first). */
+export async function fetchOrders(userId: string): Promise<OrderResult[]> {
+    return apiRequest<OrderResult[]>(`/api/orders?user_id=${encodeURIComponent(userId)}`)
 }
 
 /** One cart line as stored server-side (shared with the agent's cart). */

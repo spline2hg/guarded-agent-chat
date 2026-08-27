@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+    ClipboardList,
     Loader2,
     Minus,
     PackageOpen,
@@ -18,8 +19,15 @@ import {
     Trash2,
     X,
 } from 'lucide-react'
-import { createOrder, fetchCart, fetchProducts, saveCart, ApiError } from '@/api'
-import type { Product } from '@/types'
+import {
+    createOrder,
+    fetchCart,
+    fetchOrders,
+    fetchProducts,
+    saveCart,
+    ApiError,
+} from '@/api'
+import type { OrderResult, Product } from '@/types'
 import { spring } from '@/chat-ui/lib/springs'
 
 const CART_KEY = 'gac_cart'
@@ -68,11 +76,13 @@ export function ShopPanel({ open, onClose, refreshKey, userId, onCartChange }: S
     const [loading, setLoading] = useState(false)
     const [loadError, setLoadError] = useState<string | null>(null)
     const [cart, setCart] = useState<CartLine[]>(loadCart)
-    const [tab, setTab] = useState<'products' | 'cart'>('products')
+    const [tab, setTab] = useState<'products' | 'cart' | 'orders'>('products')
     const [category, setCategory] = useState<string>('All')
     const [checkingOut, setCheckingOut] = useState(false)
     const [checkoutError, setCheckoutError] = useState<string | null>(null)
     const [orderNote, setOrderNote] = useState<string | null>(null)
+    const [orders, setOrders] = useState<OrderResult[]>([])
+    const [ordersLoading, setOrdersLoading] = useState(false)
     // Set once the server cart has been read; local edits persist to the
     // server only after that, so we never clobber agent-added lines with
     // stale localStorage before seeing them.
@@ -135,6 +145,20 @@ export function ShopPanel({ open, onClose, refreshKey, userId, onCartChange }: S
             .finally(() => {
                 if (!cancelled) setLoading(false)
             })
+        // Order history: refetch on open / after chat turns / after checkout.
+        if (userId) {
+            setOrdersLoading(true)
+            fetchOrders(userId)
+                .then((list) => {
+                    if (!cancelled) setOrders(list)
+                })
+                .catch(() => {
+                    /* history is non-critical */
+                })
+                .finally(() => {
+                    if (!cancelled) setOrdersLoading(false)
+                })
+        }
         // Server cart is the source of truth (the agent may have changed it).
         if (userId) {
             fetchCart(userId)
@@ -187,20 +211,24 @@ export function ShopPanel({ open, onClose, refreshKey, userId, onCartChange }: S
     }
 
     const checkout = async () => {
-        if (cart.length === 0 || checkingOut) return
+        if (!userId || cart.length === 0 || checkingOut) return
         setCheckingOut(true)
         setCheckoutError(null)
         try {
             let placed = 0
             for (const line of cart) {
-                await createOrder(line.productId, line.qty)
+                await createOrder(userId, line.productId, line.qty)
                 placed += line.qty
             }
             setCart([])
-            setOrderNote(`Order placed — ${placed} item${placed === 1 ? '' : 's'} on the way!`)
-            setTab('products')
-            const list = await fetchProducts()
+            setOrderNote(`Order placed — ${placed} item${placed === 1 ? '' : 's'}!`)
+            const [list, history] = await Promise.all([
+                fetchProducts(),
+                fetchOrders(userId).catch(() => null),
+            ])
             setProducts(list)
+            if (history) setOrders(history)
+            setTab('orders')
         } catch (error) {
             setCheckoutError(
                 error instanceof ApiError ? error.message : 'Checkout failed — try again.'
@@ -267,6 +295,15 @@ export function ShopPanel({ open, onClose, refreshKey, userId, onCartChange }: S
                                     }`}
                                 >
                                     Cart{cartCount > 0 ? ` (${cartCount})` : ''}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTab('orders')}
+                                    className={`cursor-pointer rounded-md px-2.5 py-1 text-[13px] transition-colors hover:bg-hover ${
+                                        tab === 'orders' ? 'font-medium text-foreground' : 'text-muted-foreground'
+                                    }`}
+                                >
+                                    Orders{orders.length > 0 ? ` (${orders.length})` : ''}
                                 </button>
                                 <button
                                     type="button"
@@ -363,7 +400,7 @@ export function ShopPanel({ open, onClose, refreshKey, userId, onCartChange }: S
                                     </div>
                                 </div>
                             </>
-                        ) : (
+                        ) : tab === 'cart' ? (
                             <div className="flex min-h-0 flex-1 flex-col">
                                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
                                     {cart.length === 0 ? (
@@ -433,26 +470,80 @@ export function ShopPanel({ open, onClose, refreshKey, userId, onCartChange }: S
                                         </ul>
                                     )}
                                 </div>
-                                <footer className="border-t border-border px-4 py-3">
+                                <footer className="shrink-0 border-t border-border bg-card px-4 py-3">
                                     {checkoutError && (
                                         <p className="mb-2 text-[12px] text-destructive">{checkoutError}</p>
                                     )}
                                     <div className="mb-2 flex items-baseline justify-between">
                                         <span className="text-[13px] text-muted-foreground">
-                                            {cartCount} item{cartCount === 1 ? '' : 's'}
+                                            {cartCount} item{cartCount === 1 ? '' : 's'} · subtotal
                                         </span>
-                                        <span className="text-[15px] font-medium">{money(subtotal)}</span>
+                                        <span className="text-[15px] font-semibold">{money(subtotal)}</span>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => void checkout()}
                                         disabled={cart.length === 0 || checkingOut}
-                                        className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-foreground px-3 py-2 text-[13px] font-medium text-background transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40"
+                                        className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[13px] font-semibold transition-colors ${
+                                            cart.length === 0 || checkingOut
+                                                ? 'cursor-not-allowed bg-hover text-muted-foreground'
+                                                : 'cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:text-emerald-950'
+                                        }`}
                                     >
                                         {checkingOut && <Loader2 size={14} className="animate-spin" />}
-                                        {checkingOut ? 'Placing order…' : 'Checkout'}
+                                        {checkingOut
+                                            ? 'Placing order…'
+                                            : cart.length === 0
+                                              ? 'Add items to check out'
+                                              : `Checkout · ${money(subtotal)}`}
                                     </button>
                                 </footer>
+                            </div>
+                        ) : (
+                            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                                {ordersLoading && orders.length === 0 ? (
+                                    <div className="flex items-center gap-2 py-16 text-muted-foreground">
+                                        <Loader2 size={16} className="animate-spin" />
+                                        <span className="text-sm">Loading orders…</span>
+                                    </div>
+                                ) : orders.length === 0 ? (
+                                    <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                                        <ClipboardList size={24} />
+                                        <p className="text-sm">No orders yet.</p>
+                                        <p className="text-[12px]">Check out your cart to see it here.</p>
+                                    </div>
+                                ) : (
+                                    <ul className="flex flex-col gap-2">
+                                        {orders.map((order) => {
+                                            const product = productById.get(order.product_id)
+                                            return (
+                                                <li
+                                                    key={order.order_id}
+                                                    className="flex items-center gap-2.5 rounded-xl border border-border bg-card p-2.5"
+                                                >
+                                                    <div
+                                                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-2xl ${tileClass(
+                                                            product?.category ?? ''
+                                                        )}`}
+                                                    >
+                                                        {product?.emoji || '📦'}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate text-[13px] font-medium">
+                                                            {order.product_name}
+                                                        </p>
+                                                        <p className="text-[11px] text-muted-foreground">
+                                                            Order #{order.order_id} · qty {order.quantity}
+                                                        </p>
+                                                    </div>
+                                                    <span className="rounded-full border border-border px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+                                                        {order.status}
+                                                    </span>
+                                                </li>
+                                            )
+                                        })}
+                                    </ul>
+                                )}
                             </div>
                         )}
                     </motion.aside>

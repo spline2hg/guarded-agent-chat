@@ -18,7 +18,7 @@ export interface HealthInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Shop (GET /api/products, POST /api/orders)
+// Shop (GET /api/products, GET/POST /api/orders)
 // ---------------------------------------------------------------------------
 export interface Product {
     id: number
