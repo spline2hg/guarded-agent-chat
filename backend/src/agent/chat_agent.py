@@ -19,7 +19,7 @@ exact SQL statement, run it as-is — don't edit, add clauses, or "fix" it.
 
 Tables available through run_sql:
 - products(id, name, description, price, stock, owner_id)
-- orders(id, product_id, status, quantity)
+- orders(id, user_id, product_id, status, quantity)
 - users(id, display_name, plan, created_at)
 - customers(id, name, email, phone, address)
 - cart_items(id, user_id, product_id, quantity)

@@ -55,6 +55,9 @@ class Order(Base):
     __table_args__ = {"sqlite_autoincrement": True}  # noqa: RUF012
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("users.id"), nullable=False
+    )
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     quantity: Mapped[int] = mapped_column(nullable=False)

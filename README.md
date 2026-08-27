@@ -20,8 +20,8 @@ Every query the chat agent produces is checked against a fixed policy:
 - **PII stays private.** The `customers` table (names, emails, addresses,
   card numbers) is off-limits to the agent, no matter who asks or how the
   request is phrased.
-- **Carts are private.** Reads and writes on `cart_items` must be scoped to
-  the acting user's own rows.
+- **Carts and orders are private.** Reads and writes on `cart_items` and
+  reads of `orders` must be scoped to the acting user's own rows.
 - **One statement at a time.** Multi-statement strings (the classic
   `SELECT ...; DROP TABLE ...`) never execute.
 - **Writes respect ownership.** The agent may only create or delete products

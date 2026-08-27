@@ -36,16 +36,16 @@ PRODUCTS = [
     (7, "Opened Mystery Container", "Resale listing. At least one Docker image inside, probably.", 45.00, 2, USERS[1][0], "📦", "Infra"),
 ]
 
-# (product_id, status, quantity)
+# (user index in USERS, product_id, status, quantity)
 ORDERS = [
-    (5, "delivered", 1),
-    (1, "pending", 2),
-    (2, "shipped", 1),
-    (4, "pending", 3),
-    (7, "cancelled", 1),
-    (2, "delivered", 1),
-    (3, "pending", 1),
-    (6, "shipped", 2),
+    (0, 5, "delivered", 1),
+    (0, 1, "pending", 2),
+    (0, 2, "shipped", 1),
+    (1, 4, "pending", 3),
+    (1, 7, "cancelled", 1),
+    (2, 2, "delivered", 1),
+    (2, 3, "pending", 1),
+    (2, 6, "shipped", 2),
 ]
 
 CUSTOMERS = [
@@ -81,6 +81,13 @@ def _product_payload(row) -> Product:
     )
 
 
+def _order_payload(row) -> Order:
+    user_idx, pid, status, qty = row
+    return Order(
+        user_id=USERS[user_idx][0], product_id=pid, status=status, quantity=qty
+    )
+
+
 def seed() -> None:
     init_db()
     with SessionLocal() as session:
@@ -93,6 +100,12 @@ def seed() -> None:
 
         first_name = session.scalar(select(Product.name).order_by(Product.id).limit(1))
         if first_name == CATALOG_MARKER:
+            # Catalog is current, but refill orders if the table was
+            # recreated (e.g. when orders gained a user_id column).
+            order_count = session.scalar(select(func.count()).select_from(Order))
+            if order_count == 0:
+                session.add_all([_order_payload(row) for row in ORDERS])
+                session.commit()
             print("Catalog already current — nothing to do.")
             return
 
@@ -101,7 +114,7 @@ def seed() -> None:
         session.execute(delete(Product))
         session.add_all([_product_payload(row) for row in PRODUCTS])
         session.flush()
-        session.add_all([Order(product_id=p, status=s, quantity=q) for p, s, q in ORDERS])
+        session.add_all([_order_payload(row) for row in ORDERS])
         session.add_all(
             [
                 CartItem(
