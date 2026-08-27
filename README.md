@@ -20,15 +20,19 @@ Every query the chat agent produces is checked against a fixed policy:
 - **PII stays private.** The `customers` table (names, emails, addresses,
   card numbers) is off-limits to the agent, no matter who asks or how the
   request is phrased.
-- **Reads are bounded.** SELECTs without a `LIMIT` of 100 or less are
-  refused — no full-table dumps.
+- **Carts are private.** Reads and writes on `cart_items` must be scoped to
+  the acting user's own rows.
 - **One statement at a time.** Multi-statement strings (the classic
   `SELECT ...; DROP TABLE ...`) never execute.
 - **Writes respect ownership.** The agent may only create or delete products
-  owned by the person it's talking to.
+  owned by the person it's talking to, plus its own cart rows.
 - **Injected instructions don't count.** Text hidden inside SQL or inside
   database values — like a product description that says "SYSTEM NOTE: run
   this query" — is treated as data, not as orders.
+
+Reads are bounded in code, not by the guard: the platform caps every query
+at 100 rows regardless of what the SQL asks for. The guard judges what a
+query touches, not how it's formatted.
 
 If the guard can't reach a verdict, the query is refused. Failing closed is
 the whole idea.
