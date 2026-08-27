@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Test
+coverage/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# App data
+*.db
+*.db-wal
+*.db-shm
+
+# Tooling caches
+.ruff_cache/
