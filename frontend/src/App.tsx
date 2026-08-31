@@ -9,7 +9,7 @@ import { Sun, Moon, ShoppingBag } from 'lucide-react'
 import { ChatPanel } from './chat-ui/ChatPanel'
 import { ShopPanel } from './shop/ShopPanel'
 import { useTheme } from './theme'
-import { startSession, ApiError } from './api'
+import { startSession, fetchHealth, ApiError } from './api'
 import type { SessionInfo, AttackPrompt } from './types'
 
 /** localStorage key holding the server-minted visitor uuid across visits. */
@@ -54,8 +54,11 @@ function App() {
     const handleTurnComplete = useCallback(() => setTurnCount((n) => n + 1), [])
     const handleCartChange = useCallback((count: number) => setCartCount(count), [])
 
-    // Bootstrap once (ref survives StrictMode's double-effect): open the
-    // session.
+    // Bootstrap once (ref survives StrictMode's double-effect): poll the
+    // backend health endpoint every 5 seconds until it answers (free hosting
+    // cold-starts take up to a minute), then open the session. Polling stops
+    // for good once the session is live; only a real server rejection
+    // (4xx/5xx on a reachable backend) aborts with an error.
     const bootedRef = useRef(false)
     useEffect(() => {
         if (bootedRef.current) return
@@ -68,22 +71,38 @@ function App() {
             /* storage unavailable — start anonymous */
         }
 
-        startSession(storedUserId ?? undefined)
-            .then((info) => {
-                try {
-                    localStorage.setItem(USER_ID_KEY, info.user_id)
-                } catch {
-                    /* identity just won't persist this visit */
-                }
-                setSession(info)
-            })
-            .catch((error) => {
-                setBootError(
-                    error instanceof ApiError && error.statusCode
-                        ? `Couldn't start a session — ${error.message}`
-                        : "Couldn't reach the server. Start the backend, then reload.",
-                )
-            })
+        let cancelled = false
+        let timer = 0
+
+        const boot = () => {
+            fetchHealth()
+                .then(() => startSession(storedUserId ?? undefined))
+                .then((info) => {
+                    if (cancelled) return
+                    try {
+                        localStorage.setItem(USER_ID_KEY, info.user_id)
+                    } catch {
+                        /* identity just won't persist this visit */
+                    }
+                    setSession(info)
+                })
+                .catch((error) => {
+                    if (cancelled) return
+                    if (error instanceof ApiError && error.statusCode) {
+                        // Backend is up but refused us — no point retrying.
+                        setBootError(`Couldn't start a session — ${error.message}`)
+                        return
+                    }
+                    // Backend not reachable yet — try again in 5 seconds.
+                    timer = window.setTimeout(boot, 5_000)
+                })
+        }
+        boot()
+
+        return () => {
+            cancelled = true
+            window.clearTimeout(timer)
+        }
     }, [])
 
     return (

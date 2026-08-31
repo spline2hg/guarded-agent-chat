@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Loader2, Zap } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { InputMessage } from '@/chat-ui/components/ui/input-message';
 import { ChatMessage } from '@/chat-ui/components/ui/chat-message';
 import {
@@ -33,6 +33,20 @@ import type {
 
 /** localStorage key holding the chat transcript across visits/reloads. */
 const CHAT_HISTORY_KEY = 'gac_chat_history';
+
+/** Braille spinner frames — a classic terminal-style "work in progress" dot. */
+const BRAILLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+/** Animate the braille dots while `active`; freezes (returns '') otherwise. */
+function useBrailleSpinner(active: boolean): string {
+    const [frame, setFrame] = useState(0);
+    useEffect(() => {
+        if (!active) return;
+        const timer = window.setInterval(() => setFrame((n) => n + 1), 90);
+        return () => window.clearInterval(timer);
+    }, [active]);
+    return active ? BRAILLE_FRAMES[frame % BRAILLE_FRAMES.length] : '';
+}
 
 // Persisted shape — same as Message, guaranteed by construction below.
 interface StoredMessage {
@@ -356,6 +370,7 @@ export function ChatPanel({ session, welcome, bootError, attacks, onGuardEntry, 
     };
 
     const inputDisabled = !session || thinking;
+    const bootBraille = useBrailleSpinner(!session && !bootError);
 
     return (
         <div className="chat-ui relative flex min-h-0 w-full flex-1 flex-col">
@@ -383,8 +398,10 @@ export function ChatPanel({ session, welcome, bootError, attacks, onGuardEntry, 
                                     <p className="max-w-md text-center text-sm">{bootError}</p>
                                 ) : (
                                     <>
-                                        <Loader2 size={16} className="animate-spin" />
-                                        <p className="text-sm">Connecting…</p>
+                                        <span className="font-mono text-2xl leading-none" aria-hidden="true">
+                                            {bootBraille}
+                                        </span>
+                                        <p className="text-sm">Backend is starting up — this can take up to a minute.</p>
                                     </>
                                 )}
                             </div>

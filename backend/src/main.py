@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,12 +14,22 @@ from .store import ensure_user
 
 init_db()
 
+# Seed the demo catalog on every boot — Render's disk is ephemeral, so the
+# products must be re-created from code (seed.py is idempotent).
+try:
+    from seed import seed as _seed
+
+    _seed()
+except Exception as _exc:  # noqa: BLE001 — never block startup on seeding
+    print(f"Seeding skipped: {_exc}")
+
 app = FastAPI(title="Guarded Agent Chat")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=os.environ.get("CORS_ORIGINS", "").split(","),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
