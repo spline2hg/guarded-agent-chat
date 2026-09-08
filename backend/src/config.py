@@ -23,6 +23,8 @@ class Settings:
     write_budget: int = 10
     agent_timeout_s: float = 90.0
     guard_timeout_s: float = 30.0
+    log_api_url: str = os.getenv("LOG_API_URL", "")
+    log_api_key: str = os.getenv("LOG_API_KEY", "")
 
 
 settings = Settings()

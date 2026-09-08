@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db import init_db
-from .routers import chat, shop
+from .routers import agent, chat, shop
 from .schemas import SessionInfo, SessionRequest
 from .sessions import sessions
 from .store import ensure_user
@@ -52,4 +52,5 @@ def health() -> dict:
 
 
 app.include_router(chat.router, prefix="/api")
+app.include_router(agent.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")

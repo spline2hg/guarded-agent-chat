@@ -34,3 +34,20 @@ class SessionRequest(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str
     message: str = Field(min_length=1, max_length=4000)
+
+
+class AgentRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=4000)
+    session_id: str | None = None
+
+
+class AgentEvent(BaseModel):
+    event: str
+    data: dict = Field(default_factory=dict)
+
+
+class AgentResponse(BaseModel):
+    answer: str
+    blocked_total: int
+    session_id: str
+    events: list[AgentEvent] = Field(default_factory=list)

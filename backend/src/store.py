@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from .config import settings
 from .db import SessionLocal, engine
-from .models import User
+from .models import User, utcnow
 
 
 def _user_payload(user: User) -> dict[str, str]:
@@ -32,6 +32,27 @@ def ensure_user(user_id: str | None) -> dict[str, str]:
         user = User.new_guest(str(uuid.uuid4()))
         session.add(user)
         session.commit()
+        return _user_payload(user)
+
+
+# Stable identity for the stateless /api/agent endpoint. It owns no orders and
+# no cart, so scoping rules can never surface another user's data through it.
+AGENT_GUEST_ID = "00000000-0000-4000-8000-0000000000a1"
+
+
+def ensure_agent_guest() -> dict[str, str]:
+    """Return the shared agent guest user, creating it once if needed."""
+    with SessionLocal() as session:
+        user = session.get(User, AGENT_GUEST_ID)
+        if user is None:
+            user = User(
+                id=AGENT_GUEST_ID,
+                display_name="API Guest",
+                plan="free",
+                created_at=utcnow(),
+            )
+            session.add(user)
+            session.commit()
         return _user_payload(user)
 
 
